@@ -77,40 +77,37 @@ public abstract class ServiceMain {
       configureLogger();
     }
 
-    Service requiredServices = new CompositeService(prerequisites);
+    CompositeService requiredServices = new CompositeService(prerequisites);
+    CompositeService mainWithRequireds = new CompositeService(requiredServices, mainService);
+    
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
-        mainService.stopAndWait();
+        try {
+          mainWithRequireds.shutDown();
+        } catch (Exception e) {
+          //don't care
+        }
       }
     });
 
-    // Listener for state changes of the service
-    ListenableFuture<Service.State> completion = Services.getCompletionFuture(mainService);
     Throwable initFailure = null;
-
     try {
       try {
         // Starts the service
         LOG.info("Starting service {}.", mainService);
-        Futures.allAsList(Services.chainStart(requiredServices, mainService).get()).get();
+        mainWithRequireds.startAsync();
+        mainWithRequireds.awaitRunning();
         LOG.info("Service {} started.", mainService);
       } catch (Throwable t) {
-        LOG.error("Exception when starting service {}.", mainService, t);
         initFailure = t;
+        LOG.error("Exception when starting service {}.", mainService, t);
+        throw t;
       }
-
-      try {
-        if (initFailure == null) {
-          completion.get();
-          LOG.info("Service {} completed.", mainService);
-        }
-      } catch (Throwable t) {
-        LOG.error("Exception thrown from service {}.", mainService, t);
-        throw Throwables.propagate(t);
-      }
+      
+      mainService.awaitTerminated();
     } finally {
-      requiredServices.stopAndWait();
+      requiredServices.shutDown();
 
       ILoggerFactory loggerFactory = LoggerFactory.getILoggerFactory();
       if (loggerFactory instanceof LoggerContext) {

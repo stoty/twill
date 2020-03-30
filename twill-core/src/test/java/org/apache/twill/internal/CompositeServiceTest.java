@@ -49,7 +49,8 @@ public class CompositeServiceTest {
     }
 
     Service service = new CompositeService(services);
-    service.start().get(5, TimeUnit.SECONDS);
+    service.startAsync();
+    service.awaitRunning(5, TimeUnit.SECONDS);
 
     // There should be 10 permits after all 10 services started
     Assert.assertTrue(semaphore.tryAcquire(10, 5, TimeUnit.SECONDS));
@@ -59,7 +60,8 @@ public class CompositeServiceTest {
 
     // Release 10 permits for the stop sequence to start
     semaphore.release(10);
-    service.stop().get(5, TimeUnit.SECONDS);
+    service.stopAsync();
+    service.awaitTerminated(5, TimeUnit.SECONDS);
 
     // There should be no permit left after all 10 services stopped
     Assert.assertFalse(semaphore.tryAcquire(10));
@@ -80,9 +82,10 @@ public class CompositeServiceTest {
 
     Service service = new CompositeService(services);
     try {
-      service.start().get();
+      service.startAsync();
+      service.awaitRunning();
       Assert.fail();
-    } catch (ExecutionException e) {
+    } catch (IllegalStateException e) {
       // Expected
     }
 

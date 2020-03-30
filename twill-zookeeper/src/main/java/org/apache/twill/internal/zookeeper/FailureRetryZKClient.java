@@ -20,6 +20,8 @@ package org.apache.twill.internal.zookeeper;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.MoreExecutors;
+
 import org.apache.twill.common.Threads;
 import org.apache.twill.zookeeper.ACLData;
 import org.apache.twill.zookeeper.ForwardingZKClient;
@@ -74,7 +76,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<String> get() {
                             return FailureRetryZKClient.super.create(path, data, createMode, createParent, acl);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -88,7 +91,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<Stat> get() {
                             return FailureRetryZKClient.super.exists(path, watcher);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -104,7 +108,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<NodeChildren> get() {
                             return FailureRetryZKClient.super.getChildren(path, watcher);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -118,7 +123,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<NodeData> get() {
                             return FailureRetryZKClient.super.getData(path, watcher);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -132,7 +138,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<Stat> get() {
                             return FailureRetryZKClient.super.setData(dataPath, data, version);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -148,7 +155,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<String> get() {
                             return FailureRetryZKClient.super.delete(deletePath, version);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -162,7 +170,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<ACLData> get() {
                             return FailureRetryZKClient.super.getACL(path);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -176,7 +185,8 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
                           public OperationFuture<Stat> get() {
                             return FailureRetryZKClient.super.setACL(path, acl, version);
                           }
-                        }));
+                        }),
+                        MoreExecutors.directExecutor());
     return result;
   }
 
@@ -230,7 +240,7 @@ public final class FailureRetryZKClient extends ForwardingZKClient {
       SCHEDULER.schedule(new Runnable() {
         @Override
         public void run() {
-          Futures.addCallback(retryAction.get(), OperationFutureCallback.this);
+          Futures.addCallback(retryAction.get(), OperationFutureCallback.this, MoreExecutors.directExecutor());
         }
       }, nextRetry, TimeUnit.MILLISECONDS);
 

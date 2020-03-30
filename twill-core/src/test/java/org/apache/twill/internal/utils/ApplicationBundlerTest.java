@@ -20,6 +20,7 @@ package org.apache.twill.internal.utils;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
+import com.google.common.io.FileWriteMode;
 import com.google.common.io.Files;
 import org.apache.twill.filesystem.LocalLocationFactory;
 import org.apache.twill.filesystem.Location;
@@ -132,7 +133,7 @@ public class ApplicationBundlerTest {
           target.mkdirs();
         } else {
           target.getParentFile().mkdirs();
-          ByteStreams.copy(jarInput, Files.newOutputStreamSupplier(target));
+          ByteStreams.copy(jarInput, Files.asByteSink(target).openBufferedStream());
         }
 
         jarEntry = jarInput.getNextJarEntry();

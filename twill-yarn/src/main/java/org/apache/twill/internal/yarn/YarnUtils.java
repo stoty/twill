@@ -24,7 +24,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.DFSUtil;
+import org.apache.hadoop.hdfs.DFSUtilClient;
 import org.apache.hadoop.hdfs.HAUtil;
+import org.apache.hadoop.hdfs.HAUtilClient;
 import org.apache.hadoop.io.DataInputByteBuffer;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.security.Credentials;
@@ -213,7 +215,7 @@ public class YarnUtils {
     if (hasHAUtilsClient) {
       invokeStaticMethodWithExceptionHandled(cloneDelegationTokenForLogicalUriMethod, ugi, haUri, nnAddrs);
     } else {
-      HAUtil.cloneDelegationTokenForLogicalUri(ugi, haUri, nnAddrs);
+      HAUtilClient.cloneDelegationTokenForLogicalUri(ugi, haUri, nnAddrs);
     }
   }
 
@@ -225,7 +227,7 @@ public class YarnUtils {
    */
   private static Map<String, Map<String, InetSocketAddress>> getHaNnRpcAddresses(Configuration config) {
     return hasDFSUtilClient ? getHaNnRpcAddressesUseDFSUtilClient(config) :
-        DFSUtil.getHaNnRpcAddresses(config);
+        DFSUtilClient.getHaNnRpcAddresses(config);
   }
 
   private static Map<String, Map<String, InetSocketAddress>> getHaNnRpcAddressesUseDFSUtilClient(Configuration config) {

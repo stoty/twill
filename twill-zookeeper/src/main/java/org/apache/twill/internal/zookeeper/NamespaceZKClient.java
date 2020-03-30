@@ -19,6 +19,8 @@ package org.apache.twill.internal.zookeeper;
 
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.MoreExecutors;
+
 import org.apache.twill.common.Cancellable;
 import org.apache.twill.common.Threads;
 import org.apache.twill.zookeeper.ACLData;
@@ -135,7 +137,8 @@ public final class NamespaceZKClient extends ForwardingZKClient {
       public void onFailure(Throwable t) {
         to.setException(t);
       }
-    });
+    },
+    MoreExecutors.directExecutor());
     return to;
   }
 

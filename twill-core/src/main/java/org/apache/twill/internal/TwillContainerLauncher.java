@@ -22,6 +22,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -43,6 +44,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import javax.annotation.Nullable;
 
 /**
@@ -167,7 +170,7 @@ public final class TwillContainerLauncher {
 
     TwillContainerControllerImpl controller =
       new TwillContainerControllerImpl(zkClient, runId, runtimeSpec.getName(), instanceId, processController);
-    controller.start();
+    controller.startAsync();
     return controller;
   }
 
@@ -290,9 +293,8 @@ public final class TwillContainerLauncher {
     }
 
     private void killAndWait(int maxWaitSecs) {
-      Stopwatch watch = new Stopwatch();
-      watch.start();
-      while (watch.elapsedTime(TimeUnit.SECONDS) < maxWaitSecs) {
+      Stopwatch watch = Stopwatch.createStarted();
+      while (watch.elapsed(TimeUnit.SECONDS) < maxWaitSecs) {
         // Kill the application
         try {
           kill();
@@ -310,7 +312,7 @@ public final class TwillContainerLauncher {
 
       // Timeout reached, runnable has not stopped
       LOG.error("Failed to kill runnable {}, instance {} after {} seconds", runnable, instanceId,
-                watch.elapsedTime(TimeUnit.SECONDS));
+                watch.elapsed(TimeUnit.SECONDS));
       // TODO: should we throw exception here?
     }
   }

@@ -23,6 +23,7 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.twill.common.Cancellable;
@@ -258,7 +259,8 @@ public class ReentrantDistributedLock implements Lock {
           completion.setException(t);
         }
       }
-    });
+    },
+    MoreExecutors.directExecutor());
 
     // Gets the result from the completion
     try {
@@ -353,7 +355,8 @@ public class ReentrantDistributedLock implements Lock {
               completion.setException(t);
             }
           }
-        });
+        },
+        MoreExecutors.directExecutor());
       }
 
       @Override
@@ -364,7 +367,8 @@ public class ReentrantDistributedLock implements Lock {
           doAcquire(completion, waitForLock, guid, null);
         }
       }
-    });
+    },
+    MoreExecutors.directExecutor());
   }
 
   /**

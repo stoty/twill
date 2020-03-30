@@ -21,8 +21,10 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Queues;
 import com.google.common.util.concurrent.Futures;
+
+import org.apache.commons.collections.set.CompositeSet;
 import org.apache.twill.common.Cancellable;
-import org.apache.twill.internal.Services;
+import org.apache.twill.internal.CompositeService;
 import org.apache.twill.internal.kafka.EmbeddedKafkaServer;
 import org.apache.twill.internal.kafka.client.ZKKafkaClientService;
 import org.apache.twill.internal.utils.Networks;
@@ -61,27 +63,36 @@ public class KafkaTest {
   private static EmbeddedKafkaServer kafkaServer;
   private static ZKClientService zkClientService;
   private static KafkaClientService kafkaClient;
+  private static CompositeService compositeClient;
+
 
   @BeforeClass
   public static void init() throws Exception {
     zkServer = InMemoryZKServer.builder().setDataDir(TMP_FOLDER.newFolder()).build();
-    zkServer.startAndWait();
+    zkServer.startAsync();
+    zkServer.awaitRunning();
 
     // Extract the kafka.tgz and start the kafka server
     kafkaServer = new EmbeddedKafkaServer(generateKafkaConfig(zkServer.getConnectionStr()));
-    kafkaServer.startAndWait();
+    kafkaServer.startAsync();
+    kafkaServer.awaitRunning();
 
     zkClientService = ZKClientService.Builder.of(zkServer.getConnectionStr()).build();
 
     kafkaClient = new ZKKafkaClientService(zkClientService);
-    Services.chainStart(zkClientService, kafkaClient).get();
+    compositeClient = new CompositeService(zkClientService, kafkaClient);
+    compositeClient.startAsync();
+    compositeClient.awaitRunning();
   }
 
   @AfterClass
   public static void finish() throws Exception {
-    Services.chainStop(kafkaClient, zkClientService).get();
-    kafkaServer.stopAndWait();
-    zkServer.stopAndWait();
+    compositeClient.stopAsync();
+    compositeClient.awaitTerminated();
+    kafkaServer.stopAsync();
+    kafkaServer.awaitTerminated();
+    zkServer.stopAsync();
+    zkServer.awaitTerminated();
   }
 
   @Test
@@ -91,15 +102,18 @@ public class KafkaTest {
     EmbeddedKafkaServer server = new EmbeddedKafkaServer(kafkaServerConfig);
 
     ZKClientService zkClient = ZKClientService.Builder.of(zkServer.getConnectionStr() + "/backoff").build();
-    zkClient.startAndWait();
+    zkClient.startAsync();
+    zkClient.awaitRunning();
     try {
       zkClient.create("/", null, CreateMode.PERSISTENT).get();
 
       ZKKafkaClientService kafkaClient = new ZKKafkaClientService(zkClient);
-      kafkaClient.startAndWait();
+      kafkaClient.startAsync();
+      kafkaClient.awaitRunning();
 
       try {
-        server.startAndWait();
+        server.startAsync();
+        server.awaitRunning();
         try {
           // Publish a messages
           createPublishThread(kafkaClient, topic, Compression.NONE, "First message", 1).start();
@@ -128,12 +142,14 @@ public class KafkaTest {
           Assert.assertEquals("0 First message", queue.poll(60, TimeUnit.SECONDS));
 
           // Shutdown the server
-          server.stopAndWait();
+          server.stopAsync();
+          server.awaitTerminated();
 
           // Start the server again.
           // Needs to create a new instance with the same config since guava service cannot be restarted
           server = new EmbeddedKafkaServer(kafkaServerConfig);
-          server.startAndWait();
+          server.startAsync();
+          server.awaitRunning();
 
           // Wait a little while to make sure changes is reflected in broker service
           TimeUnit.SECONDS.sleep(3);
@@ -146,13 +162,16 @@ public class KafkaTest {
 
           cancel.cancel();
         } finally {
-          kafkaClient.stopAndWait();
+          kafkaClient.stopAsync();
+          kafkaClient.awaitTerminated();
         }
       } finally {
-        server.stopAndWait();
+        server.stopAsync();
+        server.awaitTerminated();
       }
     } finally {
-      zkClient.stopAndWait();
+      zkClient.stopAsync();
+      server.awaitTerminated();
     }
   }
 
@@ -247,17 +266,20 @@ public class KafkaTest {
     // Create a new namespace in ZK for Kafka server for this test case
     String connectionStr = zkServer.getConnectionStr() + "/broker_change";
     ZKClientService zkClient = ZKClientService.Builder.of(connectionStr).build();
-    zkClient.startAndWait();
+    zkClient.startAsync();
+    zkClient.awaitRunning();
     zkClient.create("/", null, CreateMode.PERSISTENT).get();
 
     // Start a new kafka server
     File logDir = TMP_FOLDER.newFolder();
     EmbeddedKafkaServer server = new EmbeddedKafkaServer(generateKafkaConfig(connectionStr, logDir));
-    server.startAndWait();
+    server.startAsync();
+    server.awaitRunning();
 
     // Start a Kafka client
     KafkaClientService kafkaClient = new ZKKafkaClientService(zkClient);
-    kafkaClient.startAndWait();
+    kafkaClient.startAsync();
+    kafkaClient.awaitRunning();
 
     // Attach a consumer
     final BlockingQueue<String> consumedMessages = Queues.newLinkedBlockingQueue();
@@ -288,9 +310,11 @@ public class KafkaTest {
     Assert.assertEquals("Message 0", consumedMessages.poll(5, TimeUnit.SECONDS));
 
     // Now shutdown and restart the server on different port
-    server.stopAndWait();
+    server.stopAsync();
+    server.awaitTerminated();
     server = new EmbeddedKafkaServer(generateKafkaConfig(connectionStr, logDir));
-    server.startAndWait();
+    server.startAsync();
+    server.awaitRunning();
 
     // Wait a little while to make sure changes is reflected in broker service
     TimeUnit.SECONDS.sleep(3);
@@ -299,9 +323,12 @@ public class KafkaTest {
     publisher.prepare("test").add(Charsets.UTF_8.encode("Message 1"), 0).send().get();
     Assert.assertEquals("Message 1", consumedMessages.poll(5, TimeUnit.SECONDS));
 
-    kafkaClient.stopAndWait();
-    zkClient.stopAndWait();
-    server.stopAndWait();
+    kafkaClient.stopAsync();
+    kafkaClient.awaitTerminated();
+    zkClient.stopAsync();
+    zkClient.awaitTerminated();
+    server.stopAsync();
+    server.awaitTerminated();
   }
 
   private Thread createPublishThread(final KafkaClient kafkaClient, final String topic,

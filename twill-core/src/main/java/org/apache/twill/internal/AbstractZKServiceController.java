@@ -160,7 +160,7 @@ public abstract class AbstractZKServiceController extends AbstractExecutionServi
       // In force shutdown, don't send message.
       stopMessageFuture = Futures.immediateFuture(State.TERMINATED);
     }
-    stop();
+    stopAsync();
   }
 
 

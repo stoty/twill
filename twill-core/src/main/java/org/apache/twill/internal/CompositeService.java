@@ -53,7 +53,8 @@ public final class CompositeService extends AbstractIdleService {
 
     for (Service service : services) {
       try {
-        service.startAndWait();
+        service.startAsync();
+        service.awaitRunning();
       } catch (UncheckedExecutionException e) {
         failureCause = e.getCause();
         break;
@@ -88,7 +89,8 @@ public final class CompositeService extends AbstractIdleService {
       Service service = itor.next();
       try {
         if (service.isRunning() || service.state() == State.STARTING) {
-          service.stopAndWait();
+          service.stopAsync();
+          service.awaitTerminated();
         }
       } catch (UncheckedExecutionException e) {
         // Just catch as we want all services stopped

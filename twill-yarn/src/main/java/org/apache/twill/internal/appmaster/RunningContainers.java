@@ -31,12 +31,19 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Table;
 import com.google.common.hash.Hashing;
+import com.google.common.io.ByteSource;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.SettableFuture;
+import com.google.common.util.concurrent.Service.Listener;
+import com.google.common.util.concurrent.Service.State;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+
+
 import org.apache.hadoop.yarn.api.records.ContainerState;
 import org.apache.twill.api.EventHandler;
 import org.apache.twill.api.ResourceReport;
@@ -44,6 +51,7 @@ import org.apache.twill.api.RunId;
 import org.apache.twill.api.RuntimeSpecification;
 import org.apache.twill.api.TwillRunResources;
 import org.apache.twill.api.logging.LogEntry;
+import org.apache.twill.common.Threads;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.internal.Constants;
 import org.apache.twill.internal.ContainerExitCodes;
@@ -52,6 +60,7 @@ import org.apache.twill.internal.ContainerLiveNodeData;
 import org.apache.twill.internal.DefaultResourceReport;
 import org.apache.twill.internal.DefaultTwillRunResources;
 import org.apache.twill.internal.RunIds;
+import org.apache.twill.internal.ServiceListenerAdapter;
 import org.apache.twill.internal.TwillContainerController;
 import org.apache.twill.internal.TwillContainerLauncher;
 import org.apache.twill.internal.TwillRuntimeSpecification;
@@ -78,6 +87,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -260,7 +270,8 @@ final class RunningContainers {
 
     LOG.info("Stopping service: {} {}", runnableName, controller.getRunId());
     // This call will block until handleCompleted() method runs or a timeout occurs
-    controller.stopAndWait();
+    controller.stopAsync();
+    controller.awaitTerminated();
 
     // Remove the stopped container state if it exists (in the case of killing the container due to timeout)
     containerLock.lock();
@@ -394,7 +405,19 @@ final class RunningContainers {
       containerLock.lock();
       try {
         for (TwillContainerController controller : containers.row(runnableName).values()) {
-          futures.add(controller.stop());
+          SettableFuture<Service.State> terminationFuture = SettableFuture.create();
+          controller.addListener(new ServiceListenerAdapter() {
+            @Override
+            public void terminated(State from) {
+              terminationFuture.set(from);
+            }
+            @Override
+            public void failed(State from, Throwable failure) {
+              terminationFuture.setException(failure);
+            }
+          }, Threads.SAME_THREAD_EXECUTOR);
+          futures.add(terminationFuture);
+          controller.stopAsync();
         }
       } finally {
         containerLock.unlock();
@@ -570,7 +593,8 @@ final class RunningContainers {
           }
         }
       }
-    });
+    }
+    ,MoreExecutors.directExecutor());
   }
 
   /**
@@ -724,7 +748,8 @@ final class RunningContainers {
     try {
       Gson gson = new GsonBuilder().serializeNulls().create();
       String jsonStr = gson.toJson(logLevels);
-      String fileName = Hashing.md5().hashString(jsonStr) + "." + Constants.Files.LOG_LEVELS;
+      String fileName = ByteSource.wrap(jsonStr.getBytes()).hash(Hashing.md5()).toString() + "." + Constants.Files.LOG_LEVELS;
+      
       Location location = applicationLocation.append(fileName);
       if (!location.exists()) {
         try (Writer writer = new OutputStreamWriter(location.getOutputStream(), Charsets.UTF_8)) {

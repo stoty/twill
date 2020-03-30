@@ -33,7 +33,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.twill.api.logging.LogThrowable;
 import org.apache.twill.common.Threads;
-import org.apache.twill.internal.Services;
+import org.apache.twill.internal.CompositeService;
 import org.apache.twill.internal.json.ILoggingEventSerializer;
 import org.apache.twill.internal.json.LogThrowableCodec;
 import org.apache.twill.internal.json.StackTraceElementCodec;
@@ -76,6 +76,7 @@ public final class KafkaAppender extends UnsynchronizedAppenderBase<ILoggingEven
   private LogEventConverter eventConverter;
   private ZKClientService zkClientService;
   private KafkaClientService kafkaClient;
+  private CompositeService compositeClient;
   private String zkConnectStr;
   private String hostname;
   private String runnableName;
@@ -153,24 +154,14 @@ public final class KafkaAppender extends UnsynchronizedAppenderBase<ILoggingEven
                                  RetryStrategies.fixDelay(1, TimeUnit.SECONDS))));
 
     kafkaClient = new ZKKafkaClientService(zkClientService);
-    Futures.addCallback(Services.chainStart(zkClientService, kafkaClient),
-                        new FutureCallback<List<ListenableFuture<Service.State>>>() {
-      @Override
-      public void onSuccess(List<ListenableFuture<Service.State>> result) {
-        for (ListenableFuture<Service.State> future : result) {
-          Preconditions.checkState(Futures.getUnchecked(future) == Service.State.RUNNING,
-                                   "Service is not running.");
-        }
-        addInfo("Kafka client started: " + zkConnectStr);
-        scheduler.scheduleWithFixedDelay(flushTask, 0, flushPeriod, TimeUnit.MILLISECONDS);
-      }
-
-      @Override
-      public void onFailure(Throwable t) {
-        // Fail to talk to kafka. Other than logging, what can be done?
-        addError("Failed to start kafka appender.", t);
-      }
-    }, Threads.SAME_THREAD_EXECUTOR);
+    compositeClient = new CompositeService(zkClientService, kafkaClient);
+    try {
+      compositeClient.startAsync();
+      compositeClient.awaitRunning();
+      addInfo("Kafka client started: " + zkConnectStr);
+    } catch (Throwable t) {
+      addError("Failed to start kafka appender.", t);
+    }
 
     super.start();
   }
@@ -179,7 +170,8 @@ public final class KafkaAppender extends UnsynchronizedAppenderBase<ILoggingEven
   public void stop() {
     super.stop();
     scheduler.shutdownNow();
-    Futures.getUnchecked(Services.chainStop(kafkaClient, zkClientService));
+    compositeClient.stopAsync();
+    compositeClient.awaitTerminated();
   }
 
   public void forceFlush() {
@@ -218,8 +210,7 @@ public final class KafkaAppender extends UnsynchronizedAppenderBase<ILoggingEven
     }
 
     try {
-      Stopwatch stopwatch = new Stopwatch();
-      stopwatch.start();
+      Stopwatch stopwatch = Stopwatch.createStarted();
       long publishTimeout = timeout;
 
       do {
@@ -230,7 +221,7 @@ public final class KafkaAppender extends UnsynchronizedAppenderBase<ILoggingEven
         } catch (ExecutionException e) {
           addError("Failed to publish logs to Kafka.", e);
           TimeUnit.NANOSECONDS.sleep(backOffTime);
-          publishTimeout -= stopwatch.elapsedTime(timeoutUnit);
+          publishTimeout -= stopwatch.elapsed(timeoutUnit);
           stopwatch.reset();
           stopwatch.start();
         }

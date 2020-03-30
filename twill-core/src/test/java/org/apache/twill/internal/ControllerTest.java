@@ -50,17 +50,20 @@ public class ControllerTest {
   @Test
   public void testController() throws ExecutionException, InterruptedException, TimeoutException {
     InMemoryZKServer zkServer = InMemoryZKServer.builder().build();
-    zkServer.startAndWait();
+    zkServer.startAsync();
+    zkServer.awaitRunning();
 
     LOG.info("ZKServer: " + zkServer.getConnectionStr());
 
     try {
       RunId runId = RunIds.generate();
       ZKClientService zkClientService = ZKClientService.Builder.of(zkServer.getConnectionStr()).build();
-      zkClientService.startAndWait();
+      zkClientService.startAsync();
+      zkClientService.awaitRunning();
 
       Service service = createService(zkClientService, runId);
-      service.startAndWait();
+      service.startAsync();
+      service.awaitRunning();
 
       TwillController controller = getController(zkClientService, "testController", runId);
       controller.sendCommand(Command.Builder.of("test").build()).get(2, TimeUnit.SECONDS);
@@ -76,10 +79,12 @@ public class ControllerTest {
 
       Assert.assertTrue(service.state() == Service.State.TERMINATED || terminateLatch.await(2, TimeUnit.SECONDS));
 
-      zkClientService.stopAndWait();
+      zkClientService.stopAsync();
+      zkClientService.awaitTerminated();
 
     } finally {
-      zkServer.stopAndWait();
+      zkServer.stopAsync();
+      zkServer.awaitTerminated();
     }
   }
 
@@ -87,13 +92,15 @@ public class ControllerTest {
   @Test
   public void testControllerBefore() throws InterruptedException, ExecutionException, TimeoutException {
     InMemoryZKServer zkServer = InMemoryZKServer.builder().build();
-    zkServer.startAndWait();
+    zkServer.startAsync();
+    zkServer.awaitRunning();
 
     LOG.info("ZKServer: " + zkServer.getConnectionStr());
     try {
       RunId runId = RunIds.generate();
       ZKClientService zkClientService = ZKClientService.Builder.of(zkServer.getConnectionStr()).build();
-      zkClientService.startAndWait();
+      zkClientService.startAsync();
+      zkClientService.awaitRunning();
 
       final CountDownLatch runLatch = new CountDownLatch(1);
       TwillController controller = getController(zkClientService, "testControllerBefore", runId);
@@ -105,7 +112,8 @@ public class ControllerTest {
       }, Threads.SAME_THREAD_EXECUTOR);
 
       Service service = createService(zkClientService, runId);
-      service.start();
+      service.startAsync();
+      service.awaitRunning();
 
       Assert.assertTrue(runLatch.await(2, TimeUnit.SECONDS));
 
@@ -116,11 +124,13 @@ public class ControllerTest {
         // Expected
       }
 
-      service.stop();
+      service.stopAsync();
+      service.awaitTerminated();
       controller.awaitTerminated(120, TimeUnit.SECONDS);
 
     } finally {
-      zkServer.stopAndWait();
+      zkServer.stopAsync();
+      zkServer.awaitTerminated();
     }
   }
 
@@ -128,16 +138,19 @@ public class ControllerTest {
   @Test
   public void testControllerListener() throws InterruptedException {
     InMemoryZKServer zkServer = InMemoryZKServer.builder().build();
-    zkServer.startAndWait();
+    zkServer.startAsync();
+    zkServer.awaitRunning();
 
     LOG.info("ZKServer: " + zkServer.getConnectionStr());
     try {
       RunId runId = RunIds.generate();
       ZKClientService zkClientService = ZKClientService.Builder.of(zkServer.getConnectionStr()).build();
-      zkClientService.startAndWait();
+      zkClientService.startAsync();
+      zkClientService.awaitRunning();
 
       Service service = createService(zkClientService, runId);
-      service.startAndWait();
+      service.startAsync();
+      service.awaitRunning();
 
       final CountDownLatch runLatch = new CountDownLatch(1);
       TwillController controller = getController(zkClientService, "testControllerListener", runId);
@@ -150,11 +163,14 @@ public class ControllerTest {
 
       Assert.assertTrue(runLatch.await(2, TimeUnit.SECONDS));
 
-      service.stopAndWait();
+      service.stopAsync();
+      service.awaitTerminated();
 
-      zkClientService.stopAndWait();
+      zkClientService.stopAsync();
+      zkClientService.awaitTerminated();
     } finally {
-      zkServer.stopAndWait();
+      zkServer.stopAsync();
+      zkServer.awaitTerminated();
     }
   }
 
@@ -212,7 +228,8 @@ public class ControllerTest {
         return null;
       }
     };
-    controller.startAndWait();
+    controller.startAsync();
+    controller.awaitRunning();
     return controller;
   }
 }

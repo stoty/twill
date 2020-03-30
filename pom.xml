@@ -167,7 +167,7 @@
         <surefire.redirectTestOutputToFile>true</surefire.redirectTestOutputToFile>
         <slf4j.version>1.7.30</slf4j.version>
         <logback.version>1.0.9</logback.version>
-        <guava.version>13.0.1</guava.version>
+        <guava.version>28.1-jre</guava.version>
         <gson.version>2.2.4</gson.version>
         <findbugs.jsr305.version>2.0.1</findbugs.jsr305.version>
         <netty.version>4.1.16.Final</netty.version>
@@ -176,11 +176,11 @@
         <asm.version>7.1</asm.version>
         <kafka.version>0.8.2.2</kafka.version>
         <zkclient.version>0.10</zkclient.version>
-        <zookeeper.version>3.4.5</zookeeper.version>
+        <zookeeper.version>3.4.13</zookeeper.version>
         <junit.version>4.11</junit.version>
         <jopt-simple.version>3.2</jopt-simple.version>
         <commons-compress.version>1.5</commons-compress.version>
-        <force.mac.tests>false</force.mac.tests>
+        <force.mac.tests>true</force.mac.tests>
     </properties>
 
     <scm>
@@ -598,6 +598,41 @@
             <id>hadoop-2.6</id>
             <properties>
                 <hadoop.version>2.6.5</hadoop.version>
+            </properties>
+<!--             <activation> -->
+<!--                 <activeByDefault>true</activeByDefault> -->
+<!--             </activation> -->
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>1.8</version>
+                        <executions>
+                            <execution>
+                                <id>add-source</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>add-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>src/main/hadoop21</source>
+                                        <source>src/main/hadoop22</source>
+                                        <source>src/main/hadoop23</source>
+                                        <source>src/main/hadoop26</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>hadoop-3.2</id>
+            <properties>
+                <hadoop.version>3.2.1</hadoop.version>
             </properties>
             <activation>
                 <activeByDefault>true</activeByDefault>

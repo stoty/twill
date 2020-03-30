@@ -32,6 +32,8 @@ import java.io.File;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  *
@@ -121,15 +123,40 @@ public final class InMemoryZKServer implements Service {
       file.delete();
     }
   }
-
+  
   @Override
-  public ListenableFuture<State> start() {
-    return delegateService.start();
+  public Service startAsync() {
+    return delegateService.startAsync();
   }
 
   @Override
-  public State startAndWait() {
-    return delegateService.startAndWait();
+  public Service stopAsync() {
+    return delegateService.stopAsync();
+  }
+
+  @Override
+  public void awaitRunning() {
+    delegateService.awaitRunning();
+  }
+
+  @Override
+  public void awaitRunning(long timeout, TimeUnit unit) throws TimeoutException {
+    delegateService.awaitRunning(timeout, unit);
+  }
+
+  @Override
+  public void awaitTerminated() {
+    delegateService.awaitTerminated();
+  }
+
+  @Override
+  public void awaitTerminated(long timeout, TimeUnit unit) throws TimeoutException {
+    delegateService.awaitTerminated(timeout, unit);
+  }
+
+  @Override
+  public Throwable failureCause() {
+    return delegateService.failureCause();
   }
 
   @Override
@@ -140,16 +167,6 @@ public final class InMemoryZKServer implements Service {
   @Override
   public State state() {
     return delegateService.state();
-  }
-
-  @Override
-  public ListenableFuture<State> stop() {
-    return delegateService.stop();
-  }
-
-  @Override
-  public State stopAndWait() {
-    return delegateService.stopAndWait();
   }
 
   @Override

@@ -189,7 +189,7 @@ public final class TwillContainerMain extends ServiceMain {
 
   private static Arguments decodeArgs() throws IOException {
     return ArgumentsCodec.decode(
-      Files.newReaderSupplier(new File(Constants.Files.RUNTIME_CONFIG_JAR, Constants.Files.ARGUMENTS), Charsets.UTF_8));
+      Files.asCharSource(new File(Constants.Files.RUNTIME_CONFIG_JAR, Constants.Files.ARGUMENTS), Charsets.UTF_8));
   }
 
   @Override

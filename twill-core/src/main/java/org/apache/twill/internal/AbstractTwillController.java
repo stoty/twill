@@ -38,6 +38,7 @@ import org.apache.twill.api.logging.LogEntry;
 import org.apache.twill.api.logging.LogHandler;
 import org.apache.twill.api.logging.LogThrowable;
 import org.apache.twill.common.Cancellable;
+import org.apache.twill.common.Threads;
 import org.apache.twill.discovery.ServiceDiscovered;
 import org.apache.twill.discovery.ZKDiscoveryService;
 import org.apache.twill.internal.json.LogEntryDecoder;
@@ -102,7 +103,8 @@ public abstract class AbstractTwillController extends AbstractZKServiceControlle
   @Override
   protected synchronized void doStartUp() {
     if (kafkaClient != null && !logHandlers.isEmpty()) {
-      kafkaClient.startAndWait();
+      kafkaClient.startAsync();
+      kafkaClient.awaitRunning();
       logCancellable = kafkaClient.getConsumer().prepare()
                                   .addFromBeginning(Constants.LOG_TOPIC, 0)
                                   .consume(new LogMessageCallback(logHandlers));
@@ -119,7 +121,8 @@ public abstract class AbstractTwillController extends AbstractZKServiceControlle
     }
     if (kafkaClient != null) {
       // Safe to call stop no matter what state the KafkaClientService is in.
-      kafkaClient.stopAndWait();
+      kafkaClient.stopAsync();
+      kafkaClient.awaitTerminated();
     }
   }
 
@@ -133,7 +136,8 @@ public abstract class AbstractTwillController extends AbstractZKServiceControlle
 
     logHandlers.add(handler);
     if (logHandlers.size() == 1) {
-      kafkaClient.startAndWait();
+      kafkaClient.startAsync();
+      kafkaClient.awaitRunning();
       logCancellable = kafkaClient.getConsumer().prepare()
         .addFromBeginning(Constants.LOG_TOPIC, 0)
         .consume(new LogMessageCallback(logHandlers));
@@ -198,7 +202,7 @@ public abstract class AbstractTwillController extends AbstractZKServiceControlle
                                public String apply(Set<String> input) {
                                  return runnable;
                                }
-                             });
+                             }, Threads.SAME_THREAD_EXECUTOR);
   }
 
   @Override

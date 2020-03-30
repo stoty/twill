@@ -24,6 +24,8 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.Service.Listener;
+import com.google.common.util.concurrent.Service.State;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -135,13 +137,14 @@ public abstract class AbstractTwillService extends AbstractExecutionThreadServic
 
   /**
    * Handles message by simply logging it. Child class should override this method for custom handling of message.
+   * @param <X>
    *
    * @see org.apache.twill.internal.state.MessageCallback
    */
   @Override
   public ListenableFuture<String> onReceived(String messageId, Message message) {
     LOG.info("Message received: {}", message);
-    return Futures.immediateCheckedFuture(messageId);
+    return Futures.immediateFuture(messageId);
   }
 
   @Override
@@ -161,10 +164,10 @@ public abstract class AbstractTwillService extends AbstractExecutionThreadServic
       @Override
       public void process(WatchedEvent event) {
         if (event.getState() == Event.KeeperState.Expired) {
-          LOG.warn("ZK Session expired for service {} with runId {}.", getServiceName(), runId.getId());
+          LOG.warn("ZK Session expired for service {} with runId {}.", serviceName(), runId.getId());
           expired = true;
         } else if (event.getState() == Event.KeeperState.SyncConnected && expired) {
-          LOG.info("Reconnected after expiration for service {} with runId {}", getServiceName(), runId.getId());
+          LOG.info("Reconnected after expiration for service {} with runId {}", serviceName(), runId.getId());
           expired = false;
           logIfFailed(createLiveNode());
         }
@@ -201,7 +204,7 @@ public abstract class AbstractTwillService extends AbstractExecutionThreadServic
     } finally {
       // Given at most 5 seconds to cleanup ZK nodes
       removeLiveNode().get(5, TimeUnit.SECONDS);
-      LOG.info("Service {} with runId {} shutdown completed", getServiceName(), runId.getId());
+      LOG.info("Service {} with runId {} shutdown completed", serviceName(), runId.getId());
     }
   }
 
@@ -308,19 +311,40 @@ public abstract class AbstractTwillService extends AbstractExecutionThreadServic
       return false;
     }
 
-    // Stop this service.
-    Futures.addCallback(stop(), new FutureCallback<State>() {
+    addListener(new Listener() {
+      /**
+       * Called when the service transitions to the {@linkplain State#TERMINATED TERMINATED} state.
+       * The {@linkplain State#TERMINATED TERMINATED} state is a terminal state in the transition
+       * diagram. Therefore, if this method is called, no other methods will be called on the {@link
+       * Listener}.
+       *
+       * @param from The previous state that is being transitioned from. Failure can occur in any
+       *     state with the exception of {@linkplain State#FAILED FAILED} and {@linkplain
+       *     State#TERMINATED TERMINATED}.
+       */
       @Override
-      public void onSuccess(State result) {
+      public void terminated(State from) {
         messageRemover.run();
       }
 
+      /**
+       * Called when the service transitions to the {@linkplain State#FAILED FAILED} state. The
+       * {@linkplain State#FAILED FAILED} state is a terminal state in the transition diagram.
+       * Therefore, if this method is called, no other methods will be called on the {@link Listener}.
+       *
+       * @param from The previous state that is being transitioned from. Failure can occur in any
+       *     state with the exception of {@linkplain State#NEW NEW} or {@linkplain State#TERMINATED
+       *     TERMINATED}.
+       * @param failure The exception that caused the failure.
+       */
       @Override
-      public void onFailure(Throwable t) {
-        LOG.error("Stop service failed upon STOP command", t);
+      public void failed(State from, Throwable failure) {
+        LOG.error("Stop service failed upon STOP command", failure);
         messageRemover.run();
       }
     }, Threads.SAME_THREAD_EXECUTOR);
+    
+    stopAsync();
     return true;
   }
 
@@ -372,7 +396,7 @@ public abstract class AbstractTwillService extends AbstractExecutionThreadServic
 
       @Override
       public void onFailure(Throwable t) {
-        LOG.error("Operation failed for service {} with runId {}", getServiceName(), runId, t);
+        LOG.error("Operation failed for service {} with runId {}", serviceName(), runId, t);
       }
     }, Threads.SAME_THREAD_EXECUTOR);
   }
